@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress
+  namespace: avatar-test
+spec:
+  tls:
+    - hosts:
+        - hello.avatar.ai
+      secretName: tls-ssl
+  rules:
+    - host: hello.avatar.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: front
+                port:
+                  number: 80

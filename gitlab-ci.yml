@@ -1,0 +1,51 @@
+stages:
+    - build
+    - tests
+    - push
+    - clean
+    - deploy
+  
+build:
+  stage: build
+  script: 
+    - docker build --pull -t myrepo/hello_word:$CI_COMMIT_REF_SLUG .
+
+test:
+    stage: tests
+    needs:
+      - build
+    script: 
+      - docker run -d --rm --name hello -p 8080:5000 myrepo/hello_word:$CI_COMMIT_REF_SLUG
+      - |
+        response_code=$(curl -I -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+        if [ "$response_code" -ne 200 ]; then
+            echo "can't reach the hello api"
+            exit 1
+        fi 
+
+push:
+  stage: push
+  needs:
+    - tests
+  script: 
+    - docker login myrepo -u $REGISTRY_USER -p $REGISTRY_PASSWORD
+    - docker push docker myrepo/hello_word:$CI_COMMIT_REF_SLUG
+    # API call depend on registry to remove latest tag if doesn t overwrite
+    - docker tag myrepo/hello_word:$CI_COMMIT_REF_SLUG myrepo/hello_word:latest
+    - docker push docker myrepo/hello_word:latest
+
+clean:
+  stage: clean
+  needs:
+    - push
+  script: 
+    - docker stop hello 
+    - docker rmi -f myrepo/hello_word:latest myrepo/hello_word:$CI_COMMIT_REF_SLUG
+
+deploy:
+  stage: deploy
+  needs:
+    - push
+  script: 
+    - # stratégie d'accès au cluster
+    - kubectl -n avatar-test set image deployment/hello flask=myrepo/hello_word:$CI_COMMIT_REF_SLUG
